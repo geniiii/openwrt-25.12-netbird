@@ -59,24 +59,6 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - arch: "aarch64_generic"
-            target_path: "rockchip/armv8"
-          - arch: "arm_cortex-a9"
-            target_path: "bcm53xx/generic"
-          - arch: "arm_cortex-a15"
-            target_path: "ipq806x/generic"
-          - arch: "aarch64_cortex-a53"
-            target_path: "bcm27xx/bcm2710"
-          - arch: "aarch64_cortex-a72"
-            target_path: "bcm27xx/bcm2711"
-          - arch: "arm_cortex-a7_neon-vfpv4"
-            target_path: "ipq40xx/generic"
-          - arch: "x86_64"
-            target_path: "x86/64"
-          - arch: "i386_pentium4"
-            target_path: "x86/generic"
-          - arch: "mips_74kc"
-            target_path: "ath79/generic"
           - arch: "mipsel_24kc"
             target_path: "ramips/mt7621"
     steps:
