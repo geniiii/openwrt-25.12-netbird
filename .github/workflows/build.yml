@@ -7,10 +7,13 @@ on:
 
 env:
   OPENWRT_VERSION: "25.12.2"
+  OPENWRT_GCC: "gcc-14.3.0"
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       update: ${{ env.update }}
     steps:
@@ -26,11 +29,14 @@ jobs:
       - name: Check
         run: |
           REPO="netbirdio/netbird"
-          latesttag=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -sL https://api.github.com/repos/${REPO}/releases/latest | jq -r .tag_name)
+          latesttag=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -sL \
+            https://api.github.com/repos/${REPO}/releases/latest | jq -r .tag_name)
           localetag=$(grep "^PKG_VERSION" netbird/Makefile | sed "s/.*=\(.*\)/\1/")
           if [ "${latesttag/v/}" != "${localetag}" ]; then
             PKG_VERSION=${latesttag/v/}
-            PKG_HASH="$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -sL https://codeload.github.com/${REPO}/tar.gz/v${PKG_VERSION} | sha256sum | cut -d ' ' -f 1)"
+            PKG_HASH="$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -sL \
+              https://codeload.github.com/${REPO}/tar.gz/v${PKG_VERSION} \
+              | sha256sum | cut -d ' ' -f 1)"
             sed -i "s/^PKG_VERSION.*/PKG_VERSION:=${PKG_VERSION}/" netbird/Makefile
             sed -i "s/^PKG_HASH.*/PKG_HASH:=${PKG_HASH}/" netbird/Makefile
             echo "package_version=$PKG_VERSION" >>$GITHUB_ENV
@@ -61,6 +67,7 @@ jobs:
         target:
           - arch: "mipsel_24kc"
             target_path: "ramips/mt7621"
+            abi: ""
     steps:
       - name: Checkout
         uses: actions/checkout@main
@@ -68,13 +75,16 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
-          bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib \
-          git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev \
-          libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz \
-          mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pyelftools \
-          libpython3-dev qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip \
-          vim wget xmlto xxd zlib1g-dev python3-setuptools npm
+          sudo apt install -y zstd \
+            ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+            bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext \
+            gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 \
+            libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev \
+            libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz \
+            mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 \
+            python3-pyelftools libpython3-dev qemu-utils rsync scons squashfs-tools \
+            subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd \
+            zlib1g-dev python3-setuptools npm
           sudo apt install --reinstall libc6
           sudo systemctl daemon-reload
           sudo apt -y autoremove --purge
@@ -83,13 +93,12 @@ jobs:
       - name: Install OpenWrt SDK
         run: |
           SDK_BASE="https://downloads.openwrt.org/releases/${{ env.OPENWRT_VERSION }}/targets/${{ matrix.target.target_path }}"
-          SDK_FILE=$(curl -sL "${SDK_BASE}/" \
-            | grep -oP 'openwrt-sdk-[^"<> ]+?\.tar\.xz' \
-            | grep -v '\.sha256' \
-            | head -1)
-          echo "Downloading: ${SDK_BASE}/${SDK_FILE}"
-          wget "${SDK_BASE}/${SDK_FILE}" -O openwrt-sdk.tar.xz
-          tar -xf openwrt-sdk.tar.xz
+          TARGET_COMP=$(echo "${{ matrix.target.target_path }}" | tr '/' '-')
+          SDK_FILE="openwrt-sdk-${{ env.OPENWRT_VERSION }}-${TARGET_COMP}_${{ env.OPENWRT_GCC }}_musl${{ matrix.target.abi }}.Linux-x86_64.tar.zst"
+          SDK_URL="${SDK_BASE}/${SDK_FILE}"
+          echo "Downloading: ${SDK_URL}"
+          wget "${SDK_URL}" -O openwrt-sdk.tar.zst
+          tar -xf openwrt-sdk.tar.zst
           mv -f openwrt-sdk-* openwrt-sdk
 
       - name: Build Package
@@ -102,7 +111,9 @@ jobs:
           ./scripts/feeds update -a
           if [ -d ./feeds/packages/lang/golang ]; then
             rm -rf ./feeds/packages/lang/golang
-            git clone --depth=1 -b 25.x https://github.com/sbwml/packages_lang_golang ./feeds/packages/lang/golang
+            git clone --depth=1 -b 25.x \
+              https://github.com/sbwml/packages_lang_golang \
+              ./feeds/packages/lang/golang
           fi
           ./scripts/feeds install -a
 
@@ -118,7 +129,7 @@ jobs:
           path: openwrt-sdk/packed/*.apk
           if-no-files-found: error
 
-      - name: Upload firmware to release
+      - name: Upload to Release
         uses: softprops/action-gh-release@v2
         if: success() && !cancelled()
         env:
