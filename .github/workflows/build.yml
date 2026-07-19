@@ -6,7 +6,7 @@ on:
     - cron: '0 0 * * 0'
 
 env:
-  OPENWRT_VERSION: "25.12.2"
+  OPENWRT_VERSION: "25.12.5"
   OPENWRT_GCC: "gcc-14.3.0"
 
 jobs:
